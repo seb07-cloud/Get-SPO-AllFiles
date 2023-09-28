@@ -3,8 +3,9 @@ Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extens
 Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.Runtime.dll"
 
 #Config Parameters
-$SiteURL = "https://sharepoint-site-url.com"
+$AdminSite = "https://admin-site-url.com"
 $CSVPath = ".\export.csv"
+
     
 #Function to get all files of a folder
 Function Get-FilesFromFolder([Microsoft.SharePoint.Client.Folder]$Folder) {
@@ -17,11 +18,15 @@ Function Get-FilesFromFolder([Microsoft.SharePoint.Client.Folder]$Folder) {
 
   #list all files in Folder
   ForEach ($File in $Folder.files) {
-    #Get the File Name or do something
+
+    $extension = [System.IO.Path]::GetExtension($File.Name)
+
     [void]$ListItemCollection.Add([PSCustomObject]@{
-        DocumentTitle   = $File.Name
-        LastModified = $List.LastItemModifiedDate
-        Path = $Folder.ServerRelativeUrl
+        DocumentTitle = $File.Name
+        LastModified  = $File.TimeLastModified
+        Path          = $Folder.ServerRelativeUrl
+        FileSizeInMb  = [Math]::Round($File.Length / 1048576, 2)
+        FileExtension = $extension
       })
   }
 
@@ -61,28 +66,49 @@ Function Get-SPODocLibraryFiles() {
   }
 }
 
+function Export-AllSPOSites {
+  param (
+    [Parameter(Mandatory = $true)]  [string] $AdminSite
+  )
+  
+  try {
+    Connect-SPOService -Url $AdminSite -Credential $cred  
+    $sites = Get-SPOSite
+  }
+  catch {
+    Write-Error "Error connecting to Admin Site!" $_.Exception.Message
+  }
+
+  $sites.Url
+}
+
 
 Try {
 
   # Get Credentials
   $cred = Get-Credential
+  $sites = Export-AllSPOSites -AdminSite $AdminSite
 
-  #Setup the context
-  $Ctx = New-Object Microsoft.SharePoint.Client.ClientContext($SiteURL)
-  $Ctx.Credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($Cred.Username, $Cred.Password)
+  foreach ($site in $sites) {
+
+
+    #Setup the context
+    $Ctx = New-Object Microsoft.SharePoint.Client.ClientContext($site)
+    $Ctx.Credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($Cred.Username, $Cred.Password)
           
-  #Get all lists from the Web
-  $Lists = $Ctx.Web.Lists
-  $Ctx.Load($Lists)
-  $Ctx.ExecuteQuery()
-  $ListItemCollection = New-Object System.Collections.ArrayList
+    #Get all lists from the Web
+    $Lists = $Ctx.Web.Lists
+    $Ctx.Load($Lists)
+    $Ctx.ExecuteQuery()
+    $ListItemCollection = New-Object System.Collections.ArrayList
    
  
-  #Iterate through Lists
-  ForEach ($List in $Lists | Where-Object { $_.hidden -eq $false }) {
+    #Iterate through Lists
+    ForEach ($List in $Lists | Where-Object { $_.hidden -eq $false }) {
 
-    Get-SPODocLibraryFiles -SiteURL $SiteURL -LibraryName $List.Title
+      Get-SPODocLibraryFiles -SiteURL $site -LibraryName $List.Title
 
+    }
   }
 }
 Catch {
