@@ -63,6 +63,10 @@ Function Get-SPODocLibraryFiles() {
 
 
 Try {
+
+  # Get Credentials
+  $cred = Get-Credential
+
   #Setup the context
   $Ctx = New-Object Microsoft.SharePoint.Client.ClientContext($SiteURL)
   $Ctx.Credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($Cred.Username, $Cred.Password)
