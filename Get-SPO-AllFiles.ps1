@@ -5,7 +5,7 @@ param (
   [Parameter(Mandatory = $false)]
   [switch]$csvImport,
 
-  [Parameter(Mandatory = $true, 
+  [Parameter(Mandatory = $false,
     HelpMessage = "Full Path to the CSV, including the Name of the File")]
   [ValidateNotNullOrEmpty()]
   [string]$csvName
@@ -16,9 +16,8 @@ Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extens
 Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.Runtime.dll"
 
 #Config Parameters
-$AdminSite = "https://xxxxxxxxxxxx-admin.sharepoint.com"
+$AdminSite = "https://xxxxxxxxxxx-admin.sharepoint.com"
 
-    
 #Function to get all files of a folder
 Function Get-FilesFromFolder([Microsoft.SharePoint.Client.Folder]$Folder) {
 
@@ -41,12 +40,6 @@ Function Get-FilesFromFolder([Microsoft.SharePoint.Client.Folder]$Folder) {
         FileExtension = $extension
       })
   }
-
-  $fullCsvPath = Resolve-Path $csvName
-  $directory = [System.IO.Path]::GetDirectoryName($fullCsvPath)
-  $directory = Split-Path -Parent $fullCsvPath
-  $newCsvName = 'spFileFolderExport.csv'
-  $newFullCsvPath = Join-Path -Path $directory -ChildPath $newCsvName
   
   $ListItemCollection | Export-Csv $newFullCsvPath -NoTypeInformation -Append
    
@@ -105,12 +98,27 @@ Try {
   # $cred = Get-Credential
 
   if ($csvExport) {
+
+    if (Test-Path -Path $csvName) {
+      Remove-Item -Path $csvName
+    }
+
     Export-AllSPOSites -AdminSite $AdminSite
     break
   }
   else {
     try {
       $sites = Import-Csv -Path $csvName -Delimiter ";"
+
+      $fullCsvPath = Resolve-Path $csvName
+      $directory = [System.IO.Path]::GetDirectoryName($fullCsvPath)
+      $directory = Split-Path -Parent $fullCsvPath
+      $newCsvName = 'SpFileFolderExport.csv'
+      $newFullCsvPath = Join-Path -Path $directory -ChildPath $newCsvName 
+
+      if (Test-Path -Path $newFullCsvPath) {
+        Remove-Item -Path $newFullCsvPath
+      }
     }
     catch {
       Write-Error "Couldn't import CSV from $($csvName) - File not found!"
