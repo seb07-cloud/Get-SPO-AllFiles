@@ -5,8 +5,9 @@ param (
   [Parameter(Mandatory = $false)]
   [switch]$csvImport,
 
-  [Parameter(Mandatory = $false,
+  [Parameter(Mandatory = $true, 
     HelpMessage = "Full Path to the CSV, including the Name of the File")]
+  [ValidateNotNullOrEmpty()]
   [string]$csvName
 )
 
