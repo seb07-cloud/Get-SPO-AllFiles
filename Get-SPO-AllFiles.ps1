@@ -95,7 +95,7 @@ function Export-AllSPOSites {
 Try {
 
   # Get Credentials
-  # $cred = Get-Credential
+  $cred = Get-Credential
 
   if ($csvExport) {
 
