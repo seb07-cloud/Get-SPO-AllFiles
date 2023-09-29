@@ -1,10 +1,21 @@
+param (
+  [Parameter(Mandatory = $false)]
+  [switch]$csvExport,
+
+  [Parameter(Mandatory = $false)]
+  [switch]$csvImport,
+
+  [Parameter(Mandatory = $false,
+    HelpMessage = "Full Path to the CSV, including the Name of the File")]
+  [string]$csvName
+)
+
 #Load SharePoint CSOM Assemblies
 Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.dll"
 Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.Runtime.dll"
 
 #Config Parameters
-$AdminSite = "https://admin-site-url.com"
-$CSVPath = ".\export.csv"
+$AdminSite = "https://xxxxxxxxxxxx-admin.sharepoint.com"
 
     
 #Function to get all files of a folder
@@ -30,7 +41,13 @@ Function Get-FilesFromFolder([Microsoft.SharePoint.Client.Folder]$Folder) {
       })
   }
 
-  $ListItemCollection | Export-Csv $CSVPath -NoTypeInformation -Append
+  $fullCsvPath = Resolve-Path $csvName
+  $directory = [System.IO.Path]::GetDirectoryName($fullCsvPath)
+  $directory = Split-Path -Parent $fullCsvPath
+  $newCsvName = 'spFileFolderExport.csv'
+  $newFullCsvPath = Join-Path -Path $directory -ChildPath $newCsvName
+  
+  $ListItemCollection | Export-Csv $newFullCsvPath -NoTypeInformation -Append
    
   #Recursively Call the function to get files of all folders
   $Ctx.load($Folder.Folders)
@@ -73,41 +90,50 @@ function Export-AllSPOSites {
   
   try {
     Connect-SPOService -Url $AdminSite -Credential $cred  
-    $sites = Get-SPOSite
+    (Get-SPOSite).Url | Select-Object @{Name = 'Url'; Expression = { $_ } } | Export-Csv $csvName -NoTypeInformation
   }
   catch {
     Write-Error "Error connecting to Admin Site!" $_.Exception.Message
   }
-
-  $sites.Url
 }
 
 
 Try {
 
   # Get Credentials
-  $cred = Get-Credential
-  $sites = Export-AllSPOSites -AdminSite $AdminSite
+  # $cred = Get-Credential
 
-  foreach ($site in $sites) {
+  if ($csvExport) {
+    Export-AllSPOSites -AdminSite $AdminSite
+    break
+  }
+  else {
+    try {
+      $sites = Import-Csv -Path $csvName -Delimiter ";"
+    }
+    catch {
+      Write-Error "Couldn't import CSV from $($csvName) - File not found!"
+      break
+    }
 
+    foreach ($site in $sites) {
 
-    #Setup the context
-    $Ctx = New-Object Microsoft.SharePoint.Client.ClientContext($site)
-    $Ctx.Credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($Cred.Username, $Cred.Password)
+      Write-Host $site.Url
+
+      #Setup the context
+      $Ctx = New-Object Microsoft.SharePoint.Client.ClientContext($site.Url)
+      $Ctx.Credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($Cred.Username, $Cred.Password)
           
-    #Get all lists from the Web
-    $Lists = $Ctx.Web.Lists
-    $Ctx.Load($Lists)
-    $Ctx.ExecuteQuery()
-    $ListItemCollection = New-Object System.Collections.ArrayList
-   
+      #Get all lists from the Web
+      $Lists = $Ctx.Web.Lists
+      $Ctx.Load($Lists)
+      $Ctx.ExecuteQuery()
+      $ListItemCollection = New-Object System.Collections.ArrayList
  
-    #Iterate through Lists
-    ForEach ($List in $Lists | Where-Object { $_.hidden -eq $false }) {
-
-      Get-SPODocLibraryFiles -SiteURL $site -LibraryName $List.Title
-
+      #Iterate through Lists
+      ForEach ($List in $Lists | Where-Object { $_.hidden -eq $false }) {
+        Get-SPODocLibraryFiles -SiteURL $site -LibraryName $List.Title
+      }
     }
   }
 }
